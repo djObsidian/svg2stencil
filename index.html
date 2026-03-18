@@ -62,12 +62,12 @@
     <div class="sidebar">
         <h1>SVG2Stencil</h1>
         <div>
-            <h2>Paste Layer SVG</h2>
+            <h2>Paste Layer File</h2>
             <div class="drop-zone" id="dropZone">
-                <div class="drop-zone-text">Drop file or click to browse</div>
+                <div class="drop-zone-text">Drop SVG or Gerber file</div>
                 <div class="filename" id="filename"></div>
             </div>
-            <input type="file" id="fileInput" accept=".svg">
+            <input type="file" id="fileInput" accept=".svg,.gbr,.ger,.gtp,.gbp,.gm1,.gtl,.gbl">
         </div>
         <div>
             <h2>Stencil Size</h2>
@@ -94,7 +94,7 @@
             </div>
         </div>
         <button class="btn-primary" id="downloadBtn" disabled>Download STL</button>
-        <div class="info"><span id="infoText">Load a paste layer SVG</span></div>
+        <div class="info"><span id="infoText">Load a paste layer SVG or Gerber</span></div>
     </div>
     <div class="preview">
         <canvas id="canvas3d"></canvas>
@@ -213,6 +213,201 @@
             return clean;
         }
 
+        function parseGerber(content) {
+            // Parse coordinate format: %FSLAX<int><dec>Y<int><dec>*%
+            let xDec = 6, yDec = 6;
+            const fmtMatch = content.match(/%FSL[AI]X\d(\d)Y\d(\d)\*%/);
+            if (fmtMatch) { xDec = parseInt(fmtMatch[1]); yDec = parseInt(fmtMatch[2]); }
+
+            // Parse units
+            const toMM = content.includes('%MOIN*%') ? 25.4 : 1;
+
+            // Parse aperture macro definitions (%AM...%) to compute bounding boxes.
+            // Newer KiCad bakes absolute values into unique per-shape macro definitions,
+            // so parsing the primitives gives us the actual shape size.
+            const macroShapes = {};
+            let m;
+            const amRe = /%AM([A-Za-z][A-Za-z0-9]*)\*([\s\S]*?)%/g;
+            while ((m = amRe.exec(content)) !== null) {
+                const name = m[1];
+                const prims = m[2].split('*').map(s => s.trim()).filter(Boolean);
+                let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity, ok = false;
+                for (const prim of prims) {
+                    const p = prim.split(',').map(parseFloat);
+                    if (isNaN(p[0])) continue; // comment primitive (0 with text)
+                    if (p[0] === 1) { // circle: 1,exp,diam,x,y
+                        const r = p[2]/2, cx = p[3]||0, cy = p[4]||0;
+                        if (isNaN(r)) continue;
+                        bx0=Math.min(bx0,cx-r); bx1=Math.max(bx1,cx+r); by0=Math.min(by0,cy-r); by1=Math.max(by1,cy+r); ok=true;
+                    } else if (p[0] === 21) { // rectangle: 21,exp,w,h,cx,cy,rot
+                        const w=p[2], h=p[3], cx=p[4]||0, cy=p[5]||0, rot=((p[6]||0)*Math.PI/180);
+                        if (isNaN(w)||isNaN(h)) continue;
+                        for (const [dx,dy] of [[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]]) {
+                            const rx=cx+dx*Math.cos(rot)-dy*Math.sin(rot), ry=cy+dx*Math.sin(rot)+dy*Math.cos(rot);
+                            bx0=Math.min(bx0,rx); bx1=Math.max(bx1,rx); by0=Math.min(by0,ry); by1=Math.max(by1,ry);
+                        }
+                        ok=true;
+                    } else if (p[0] === 20) { // line: 20,exp,w,x1,y1,x2,y2,rot
+                        const hw=p[2]/2, x1=p[3], y1=p[4], x2=p[5], y2=p[6];
+                        if (isNaN(hw)) continue;
+                        bx0=Math.min(bx0,x1-hw,x2-hw); bx1=Math.max(bx1,x1+hw,x2+hw);
+                        by0=Math.min(by0,y1-hw,y2-hw); by1=Math.max(by1,y1+hw,y2+hw); ok=true;
+                    }
+                }
+                if (ok && bx1>bx0 && by1>by0) macroShapes[name] = { hw:(bx1-bx0)/2, hh:(by1-by0)/2 };
+            }
+
+            // Parse aperture definitions — params are optional (newer KiCad omits them for pre-instantiated macros)
+            const apertureMap = {};
+            const addRe = /%ADD(\d+)([A-Za-z][A-Za-z0-9]*)(?:,([^*]*))?\*%/g;
+            while ((m = addRe.exec(content)) !== null) {
+                const id = parseInt(m[1]);
+                const type = m[2];
+                const params = m[3] ? m[3].split('X').map(parseFloat) : [];
+                apertureMap[id] = { type, params };
+            }
+
+            function toVal(s, dec) { return parseInt(s) / Math.pow(10, dec) * toMM; }
+
+            function circlePoints(cx, cy, r, n = 32) {
+                const pts = [];
+                for (let i = 0; i < n; i++) {
+                    const a = (i / n) * Math.PI * 2;
+                    pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+                }
+                return pts;
+            }
+
+            function obroundPoints(cx, cy, w, h) {
+                const pts = [], n = 16;
+                if (w >= h) {
+                    const r = h / 2, dx = w / 2 - r;
+                    for (let i = 0; i <= n; i++) { const a = -Math.PI/2 + (i/n)*Math.PI; pts.push({ x: cx+dx+r*Math.cos(a), y: cy+r*Math.sin(a) }); }
+                    for (let i = 0; i <= n; i++) { const a = Math.PI/2 + (i/n)*Math.PI; pts.push({ x: cx-dx+r*Math.cos(a), y: cy+r*Math.sin(a) }); }
+                } else {
+                    const r = w / 2, dy = h / 2 - r;
+                    for (let i = 0; i <= n; i++) { const a = (i/n)*Math.PI; pts.push({ x: cx+r*Math.cos(a), y: cy+dy+r*Math.sin(a) }); }
+                    for (let i = 0; i <= n; i++) { const a = Math.PI+(i/n)*Math.PI; pts.push({ x: cx+r*Math.cos(a), y: cy-dy+r*Math.sin(a) }); }
+                }
+                return pts;
+            }
+
+            function rectPoints(cx, cy, hw, hh) {
+                return [{ x: cx-hw, y: cy-hh }, { x: cx+hw, y: cy-hh }, { x: cx+hw, y: cy+hh }, { x: cx-hw, y: cy+hh }];
+            }
+
+            function roundedRectPoints(cx, cy, hw, hh, r) {
+                if (r <= 0 || r >= Math.min(hw, hh)) return rectPoints(cx, cy, hw, hh);
+                const n = 8, pts = [], dx = hw - r, dy = hh - r;
+                for (let i = 0; i <= n; i++) { const a = (i/n)*Math.PI/2;           pts.push({x: cx+dx+r*Math.cos(a), y: cy+dy+r*Math.sin(a)}); }
+                for (let i = 0; i <= n; i++) { const a = Math.PI/2+(i/n)*Math.PI/2; pts.push({x: cx-dx+r*Math.cos(a), y: cy+dy+r*Math.sin(a)}); }
+                for (let i = 0; i <= n; i++) { const a = Math.PI+(i/n)*Math.PI/2;   pts.push({x: cx-dx+r*Math.cos(a), y: cy-dy+r*Math.sin(a)}); }
+                for (let i = 0; i <= n; i++) { const a = 3*Math.PI/2+(i/n)*Math.PI/2; pts.push({x: cx+dx+r*Math.cos(a), y: cy-dy+r*Math.sin(a)}); }
+                return pts;
+            }
+
+            function aperturePoints(ap, cx, cy) {
+                const { type, params } = ap;
+
+                // Standard single-character types
+                if (type === 'C' || type === 'P') {
+                    return (params[0] > 0) ? circlePoints(cx, cy, params[0] / 2) : [];
+                }
+                if (type === 'R' || type === 'Rect') {
+                    const hw = params[0]/2, hh = (params[1] ?? params[0])/2;
+                    return (hw > 0) ? rectPoints(cx, cy, hw, hh) : [];
+                }
+                if (type === 'O' || type === 'Oblong') {
+                    return (params[0] > 0) ? obroundPoints(cx, cy, params[0], params[1] ?? params[0]) : [];
+                }
+
+                // KiCad RoundRect macro:
+                //   params[0]        = corner radius
+                //   params[1..N-1]   = corner arc CENTER coordinates as (x,y) pairs
+                //   Actual pad extent = max(|corner_x|) + radius  (same for y)
+                //   The last param is often a rotation (0) and is skipped since N is odd.
+                if (/^RoundRect/i.test(type) && params.length >= 3) {
+                    const r = params[0];
+                    let maxAbsX = 0, maxAbsY = 0;
+                    for (let i = 1; i + 1 < params.length; i += 2) {
+                        maxAbsX = Math.max(maxAbsX, Math.abs(params[i]));
+                        maxAbsY = Math.max(maxAbsY, Math.abs(params[i+1]));
+                    }
+                    const hw = maxAbsX + r, hh = maxAbsY + r;
+                    if (hw > 0 && hh > 0) return roundedRectPoints(cx, cy, hw, hh, r);
+                }
+
+                // For any macro: try the bounding box computed from the %AM...% block
+                const ms = macroShapes[type];
+                if (ms && ms.hw > 0) return rectPoints(cx, cy, ms.hw, ms.hh);
+
+                // Generic fallback: first two params as full w/h, or first as diameter
+                if (params.length >= 2 && params[0] > 0 && params[1] > 0) {
+                    return rectPoints(cx, cy, params[0]/2, params[1]/2);
+                }
+                if (params.length >= 1 && params[0] > 0) {
+                    return circlePoints(cx, cy, params[0]/2);
+                }
+                return [];
+            }
+
+            const results = [];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let curAp = null, curX = 0, curY = 0;
+            let inRegion = false, regionPts = [];
+
+            // Remove %...% extended command blocks, then split by * into individual commands
+            const stripped = content.replace(/%[^%]*%/g, '');
+            const commands = stripped.split('*').map(s => s.trim()).filter(Boolean);
+
+            for (const cmd of commands) {
+                if (/^G0*4/.test(cmd)) continue;         // comment
+                if (/^G0*36$/.test(cmd)) { inRegion = true; regionPts = []; continue; }
+                if (/^G0*37$/.test(cmd)) {
+                    inRegion = false;
+                    if (regionPts.length >= 3) {
+                        for (const p of regionPts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+                        results.push(regionPts);
+                    }
+                    regionPts = [];
+                    continue;
+                }
+                if (/^M0*2$/.test(cmd)) break;           // end of file
+
+                // Standalone aperture select: D10+
+                const dSelect = cmd.match(/^D(\d+)$/);
+                if (dSelect) {
+                    const n = parseInt(dSelect[1]);
+                    if (n >= 10) curAp = apertureMap[n] || null;
+                    continue;
+                }
+
+                // Coordinate command with optional G-prefix, X, Y, I, J, and required D-code
+                const coordMatch = cmd.match(/^(?:G\d+)?(?:X(-?\d+))?(?:Y(-?\d+))?(?:I(-?\d+))?(?:J(-?\d+))?D0*(\d+)$/);
+                if (coordMatch) {
+                    if (coordMatch[1] !== undefined) curX = toVal(coordMatch[1], xDec);
+                    if (coordMatch[2] !== undefined) curY = -toVal(coordMatch[2], yDec);
+                    const dCode = parseInt(coordMatch[5]);
+                    if (dCode >= 10) {
+                        curAp = apertureMap[dCode] || null; // G54D<n> old-style aperture select
+                    } else if (dCode === 2) {
+                        if (inRegion) regionPts = [{ x: curX, y: curY }];
+                    } else if (dCode === 1) {
+                        if (inRegion) regionPts.push({ x: curX, y: curY });
+                    } else if (dCode === 3 && !inRegion && curAp) {
+                        const pts = aperturePoints(curAp, curX, curY);
+                        if (pts.length >= 3) {
+                            for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+                            results.push(pts);
+                        }
+                    }
+                }
+            }
+
+            svgBounds = { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+            return results;
+        }
+
         function signedArea(pts) {
             let sum = 0;
             for (let i = 0; i < pts.length; i++) {
@@ -295,10 +490,14 @@
             a.click();
         }
 
+        function isGerber(name) {
+            return /\.(gbr|ger|gtp|gbp|gm\d+|gtl|gbl)$/i.test(name);
+        }
+
         function loadFile(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                apertures = parseSVG(e.target.result);
+                apertures = isGerber(file.name) ? parseGerber(e.target.result) : parseSVG(e.target.result);
                 filenameEl.textContent = file.name;
                 dropZone.classList.add('loaded');
                 infoText.innerHTML = `Apertures: <span class="info-value">${apertures.length}</span> | Size: <span class="info-value">${svgBounds.width.toFixed(1)} x ${svgBounds.height.toFixed(1)} mm</span>`;
@@ -312,7 +511,7 @@
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]?.name.endsWith('.svg')) loadFile(e.dataTransfer.files[0]); });
+        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && (f.name.endsWith('.svg') || isGerber(f.name))) loadFile(f); });
         fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
         downloadBtn.addEventListener('click', downloadSTL);
         widthInput.addEventListener('change', generateStencil);
