@@ -16,6 +16,7 @@ Optionally add a **board lip** — a wall around the edge of the PCB that lets t
 4. Adjust stencil dimensions:
    - **Width/Height**: Overall stencil size (auto-sized to fit with 20mm margin)
    - **Thickness**: Stencil thickness (default 0.12mm)
+   - **High detail (resin)**: Enable to include apertures smaller than 0.1mm — off by default since FDM printers can't reliably print them, but resin printers can
 5. Preview the stencil in the 3D viewer (drag to rotate, scroll to zoom)
 6. Click **Download STL** to save
 
@@ -56,6 +57,6 @@ Accepts `.svg` files exported from KiCad's plot function. Parses filled paths as
 
 ## Notes
 
-- Apertures smaller than 0.1mm are filtered out
+- Apertures smaller than 0.1mm are filtered out by default — enable **High detail (resin)** to include them
 - When the board lip is enabled the STL contains the stencil and lip as a single merged solid
 - STL files may need minor repair for 3D printing (most slicers handle this automatically)
