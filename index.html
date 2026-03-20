@@ -64,8 +64,8 @@
         .hint { font-size: 0.75rem; color: #555; margin-top: 4px; }
         #lipSection { display: none; }
         #lipControls { transition: opacity 0.2s; }
-        #stencilSizeSection { transition: opacity 0.2s; }
-        .size-note { font-size: 0.75rem; color: #888; margin-bottom: 8px; display: none; }
+        #stencilDimensions { transition: opacity 0.2s; }
+        .size-note { font-size: 0.75rem; color: #e94560; margin-bottom: 8px; display: none; }
     </style>
 </head>
 <body>
@@ -93,19 +93,21 @@
 
         <div id="stencilSizeSection">
             <h2>Stencil Size</h2>
-            <div class="size-note" id="sizeNote">Bounded by edge cuts when lip is enabled</div>
-            <div class="input-group">
-                <label>Width</label>
-                <div class="input-row">
-                    <input type="number" id="stencilWidth" value="100" min="10" max="500">
-                    <span class="unit">mm</span>
+            <div id="stencilDimensions">
+                <div class="size-note" id="sizeNote">Size set by edge cuts</div>
+                <div class="input-group">
+                    <label>Width</label>
+                    <div class="input-row">
+                        <input type="number" id="stencilWidth" value="100" min="10" max="500">
+                        <span class="unit">mm</span>
+                    </div>
                 </div>
-            </div>
-            <div class="input-group">
-                <label>Height</label>
-                <div class="input-row">
-                    <input type="number" id="stencilHeight" value="100" min="10" max="500">
-                    <span class="unit">mm</span>
+                <div class="input-group">
+                    <label>Height</label>
+                    <div class="input-row">
+                        <input type="number" id="stencilHeight" value="100" min="10" max="500">
+                        <span class="unit">mm</span>
+                    </div>
                 </div>
             </div>
             <div class="input-group">
@@ -115,6 +117,11 @@
                     <span class="unit">mm</span>
                 </div>
             </div>
+            <div class="toggle-row">
+                <label for="highDetail">High detail (resin)</label>
+                <input type="checkbox" id="highDetail">
+            </div>
+            <div class="hint">Include apertures smaller than 0.1mm — only achievable on resin printers</div>
         </div>
 
         <div id="lipSection">
@@ -181,6 +188,7 @@
         const widthInput = document.getElementById('stencilWidth');
         const heightInput = document.getElementById('stencilHeight');
         const thicknessInput = document.getElementById('stencilThickness');
+        const highDetailInput = document.getElementById('highDetail');
         const lipSection = document.getElementById('lipSection');
         const lipEnabledInput = document.getElementById('lipEnabled');
         const lipHeightInput = document.getElementById('lipHeight');
@@ -238,11 +246,9 @@
                     pMinX = Math.min(pMinX, p.x); pMinY = Math.min(pMinY, p.y);
                     pMaxX = Math.max(pMaxX, p.x); pMaxY = Math.max(pMaxY, p.y);
                 }
-                if (pMaxX - pMinX >= 0.1 && pMaxY - pMinY >= 0.1) {
-                    results.push(points);
-                    minX = Math.min(minX, pMinX); minY = Math.min(minY, pMinY);
-                    maxX = Math.max(maxX, pMaxX); maxY = Math.max(maxY, pMaxY);
-                }
+                results.push(points);
+                minX = Math.min(minX, pMinX); minY = Math.min(minY, pMinY);
+                maxX = Math.max(maxX, pMaxX); maxY = Math.max(maxY, pMaxY);
             }
             svgBounds = { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
             return results;
@@ -718,8 +724,12 @@
                 shape.closePath();
             }
 
-            // Add apertures as holes
+            // Add apertures as holes — filter sub-0.1mm apertures unless high detail is enabled
+            const minApertureSize = highDetailInput.checked ? 0 : 0.1;
             for (const ap of apertures) {
+                const apXs = ap.map(p => p.x), apYs = ap.map(p => p.y);
+                if (Math.max(...apXs) - Math.min(...apXs) < minApertureSize) continue;
+                if (Math.max(...apYs) - Math.min(...apYs) < minApertureSize) continue;
                 // Transform: center and flip Y (second flip corrects the Y-inversion from parsing)
                 let pts = ap.map(p => ({ x: p.x - centerX, y: -(p.y - centerY) }));
                 pts = ensureCW(pts);
@@ -881,10 +891,11 @@
         widthInput.addEventListener('change', generateStencil);
         heightInput.addEventListener('change', generateStencil);
         thicknessInput.addEventListener('change', generateStencil);
+        highDetailInput.addEventListener('change', generateStencil);
         function updateLipUI() {
             const on = lipEnabledInput.checked;
             lipControls.style.opacity = on ? '1' : '0.4';
-            document.getElementById('stencilSizeSection').style.opacity = on ? '0.4' : '1';
+            document.getElementById('stencilDimensions').style.opacity = on ? '0.4' : '1';
             document.getElementById('sizeNote').style.display = on ? 'block' : 'none';
         }
         lipEnabledInput.addEventListener('change', () => { updateLipUI(); generateStencil(); });
