@@ -3,131 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>printastencil.com — Free Online PCB Stencil Generator</title>
-    <meta name="description" content="Convert KiCad paste layer files (SVG or Gerber) into 3D-printable stencil STL files in seconds. No install, no sign-up, runs entirely in your browser.">
-    <meta name="keywords" content="PCB stencil, SMD stencil, KiCad stencil, Gerber to STL, 3D print stencil, paste stencil generator, solder paste stencil">
-    <meta name="author" content="printastencil.com">
+    <title>SVG2Stencil</title>
+    <meta name="description" content="Convert paste layer Gerber/SVG files into 3D-printable solder paste stencils. Supports KiCad and Altium, with FDM-aware aperture merging. Runs entirely in your browser.">
+    <meta name="keywords" content="PCB stencil, SMD stencil, KiCad stencil, Altium stencil, Gerber to STL, 3D print stencil, paste stencil generator, solder paste stencil, FDM stencil">
 
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-
-    <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://printastencil.com/">
-    <meta property="og:title" content="printastencil.com — Free Online PCB Stencil Generator">
-    <meta property="og:description" content="Convert KiCad paste layer files (SVG or Gerber) into 3D-printable stencil STL files in seconds. No install, no sign-up, runs entirely in your browser.">
-    <meta property="og:image" content="https://printastencil.com/printastencil.png">
-    <meta property="og:image:width" content="1519">
-    <meta property="og:image:height" content="959">
-    <meta property="og:image:alt" content="printastencil.com — upload a KiCad paste layer and generate a 3D-printable stencil in your browser">
-
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="printastencil.com — Free Online PCB Stencil Generator">
-    <meta name="twitter:description" content="Convert KiCad paste layer files (SVG or Gerber) into 3D-printable stencil STL files in seconds. No install, no sign-up, runs entirely in your browser.">
-    <meta name="twitter:image" content="https://printastencil.com/printastencil.png">
-    <meta name="twitter:image:alt" content="printastencil.com — upload a KiCad paste layer and generate a 3D-printable stencil in your browser">
     <style>
+        :root {
+            --background-color: #fdfdfd;
+            --black-color: #000;
+            --white-color: #fff;
+            --dark-gray-color: #828282;
+            --middle-gray-color: #dcdcdc;
+            --light-gray-color: #f6f6f6;
+            --light-gray-color-2: #f1f1f1;
+            --attention-color: #ea9920;
+            --alert-color: #dd3434;
+            --done-color: #6865ff;
+            --cancellation-action-color: #ff5a5a;
+            --new-notification-and-done-background-color: #f4f4fd;
+            --alert-background-color: #fae9e9;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: system-ui, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--background-color);
+            color: var(--black-color);
             min-height: 100vh;
             display: flex;
         }
         .sidebar {
             width: 280px;
-            background: #16213e;
+            background: var(--light-gray-color);
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 16px;
             overflow-y: auto;
             max-height: 100vh;
+            border-right: 1px solid var(--middle-gray-color);
         }
-        h1 { font-size: 1.4rem; color: #e94560; }
-        h2 { font-size: 0.8rem; color: #888; text-transform: uppercase; margin-bottom: 10px; }
+        h1 { font-size: 1.4rem; color: var(--done-color); }
+        .header-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .lang-switch { display: flex; gap: 4px; }
+        .lang-btn {
+            width: auto; padding: 4px 8px; font-size: 0.75rem; font-weight: 600;
+            border: 1px solid var(--middle-gray-color); border-radius: 4px;
+            background: var(--white-color); color: var(--dark-gray-color);
+        }
+        .lang-btn.active { background: var(--done-color); color: var(--white-color); border-color: var(--done-color); }
+        h2 { font-size: 0.8rem; color: var(--dark-gray-color); text-transform: uppercase; margin-bottom: 10px; }
         .drop-zone {
-            border: 2px dashed #444;
+            border: 2px dashed var(--middle-gray-color);
             border-radius: 8px;
             padding: 20px 16px;
             text-align: center;
             cursor: pointer;
+            background: var(--white-color);
         }
-        .drop-zone:hover, .drop-zone.drag-over { border-color: #e94560; background: rgba(233,69,96,0.1); }
-        .drop-zone.loaded { border-color: #4ade80; background: rgba(74,222,128,0.1); }
-        .drop-zone-text { font-size: 0.9rem; color: #888; }
-        .filename { font-size: 0.8rem; color: #4ade80; margin-top: 8px; word-break: break-all; }
+        .drop-zone:hover, .drop-zone.drag-over { border-color: var(--done-color); background: var(--new-notification-and-done-background-color); }
+        .drop-zone.loaded { border-color: var(--done-color); background: var(--new-notification-and-done-background-color); }
+        .drop-zone-text { font-size: 0.9rem; color: var(--dark-gray-color); }
+        .filename { font-size: 0.8rem; color: var(--done-color); margin-top: 8px; word-break: break-all; }
         .input-group { margin-bottom: 10px; }
-        .input-group label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+        .input-group label { display: block; font-size: 0.8rem; color: var(--dark-gray-color); margin-bottom: 4px; }
         .input-row { display: flex; gap: 8px; align-items: center; }
         .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .toggle-row label { font-size: 0.8rem; color: #888; }
+        .toggle-row label { font-size: 0.8rem; color: var(--dark-gray-color); }
         input[type="number"] {
-            flex: 1; padding: 8px; border: 1px solid #333; border-radius: 4px;
-            background: #1a1a2e; color: #eee; font-size: 0.9rem;
+            flex: 1; padding: 8px; border: 1px solid var(--middle-gray-color); border-radius: 4px;
+            background: var(--white-color); color: var(--black-color); font-size: 0.9rem;
         }
-        input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #e94560; }
-        input:focus { outline: none; border-color: #e94560; }
-        .unit { font-size: 0.8rem; color: #666; min-width: 30px; }
+        input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--done-color); }
+        input:focus { outline: none; border-color: var(--done-color); }
+        .unit { font-size: 0.8rem; color: var(--dark-gray-color); min-width: 30px; }
         button {
             width: 100%; padding: 12px; border: none; border-radius: 6px;
             font-size: 0.9rem; font-weight: 600; cursor: pointer;
         }
-        .btn-primary { background: #e94560; color: white; }
-        .btn-primary:hover:not(:disabled) { background: #d13652; }
-        .btn-primary:disabled { background: #444; cursor: not-allowed; }
-        .info { font-size: 0.85rem; color: #888; }
-        .info-value { color: #eee; }
-        .preview { flex: 1; position: relative; }
+        .btn-primary { background: var(--done-color); color: var(--white-color); }
+        .btn-primary:hover:not(:disabled) { background: var(--done-color); filter: brightness(1.1); }
+        .btn-primary:disabled { background: var(--middle-gray-color); color: var(--dark-gray-color); cursor: not-allowed; }
+        .info { font-size: 0.85rem; color: var(--dark-gray-color); }
+        .info-value { color: var(--black-color); font-weight: 600; }
+        .preview { flex: 1; position: relative; background: var(--light-gray-color-2); }
         #canvas3d { width: 100%; height: 100%; display: block; }
-        .preview-hint { position: absolute; bottom: 10px; left: 10px; font-size: 0.75rem; color: #666; }
+        .preview-hint { position: absolute; bottom: 10px; left: 10px; font-size: 0.75rem; color: var(--dark-gray-color); }
         input[type="file"] { display: none; }
-        .hint { font-size: 0.75rem; color: #555; margin-top: 4px; }
+        .hint { font-size: 0.75rem; color: var(--dark-gray-color); margin-top: 4px; }
         #lipSection { display: none; }
         #lipControls { transition: opacity 0.2s; }
         #stencilDimensions { transition: opacity 0.2s; }
-        .size-note { font-size: 0.75rem; color: #e94560; margin-bottom: 8px; display: none; }
+        .size-note { font-size: 0.75rem; color: var(--attention-color); margin-bottom: 8px; display: none; }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h1>SVG2Stencil</h1>
+        <div class="header-row">
+            <h1>SVG2Stencil</h1>
+            <div class="lang-switch">
+                <button type="button" data-lang="en" class="lang-btn">EN</button>
+                <button type="button" data-lang="ru" class="lang-btn">RU</button>
+            </div>
+        </div>
 
         <div>
-            <h2>Paste Layer File</h2>
+            <h2 data-i18n="pasteLayer">Paste Layer File</h2>
             <div class="drop-zone" id="dropZone">
-                <div class="drop-zone-text">Drop SVG or Gerber file</div>
+                <div class="drop-zone-text" data-i18n="dropPaste">Drop SVG or Gerber file</div>
                 <div class="filename" id="filename"></div>
             </div>
             <input type="file" id="fileInput" accept=".svg,.gbr,.ger,.gtp,.gbp,.gm1,.gtl,.gbl">
         </div>
 
         <div>
-            <h2>Edge Cuts Layer <span style="color:#555;font-size:0.7rem;text-transform:none">(optional)</span></h2>
+            <h2><span data-i18n="edgeCuts">Edge Cuts Layer</span> <span style="color:var(--dark-gray-color);font-size:0.7rem;text-transform:none" data-i18n="optional">(optional)</span></h2>
             <div class="drop-zone" id="edgeCutsDropZone">
-                <div class="drop-zone-text">Drop Gerber or SVG edge cuts</div>
+                <div class="drop-zone-text" data-i18n="dropEdgeCuts">Drop Gerber or SVG edge cuts</div>
                 <div class="filename" id="edgeCutsFilename"></div>
             </div>
             <input type="file" id="edgeCutsFileInput" accept=".svg,.gbr,.ger,.gm1,.gm2,.gm3,.gko">
-            <div class="hint">e.g. Edge_Cuts.gbr, .gm1, .gko</div>
+            <div class="hint" data-i18n="edgeCutsExamples">e.g. Edge_Cuts.gbr, .gm1, .gko</div>
         </div>
 
         <div id="stencilSizeSection">
-            <h2>Stencil Size</h2>
+            <h2 data-i18n="stencilSize">Stencil Size</h2>
             <div id="stencilDimensions">
-                <div class="size-note" id="sizeNote">Size set by edge cuts</div>
+                <div class="size-note" id="sizeNote" data-i18n="sizeFromEdgeCuts">Size set by edge cuts</div>
                 <div class="input-group">
-                    <label>Width</label>
+                    <label data-i18n="width">Width</label>
                     <div class="input-row">
                         <input type="number" id="stencilWidth" value="100" min="10" max="500">
                         <span class="unit">mm</span>
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Height</label>
+                    <label data-i18n="height">Height</label>
                     <div class="input-row">
                         <input type="number" id="stencilHeight" value="100" min="10" max="500">
                         <span class="unit">mm</span>
@@ -135,42 +148,50 @@
                 </div>
             </div>
             <div class="input-group">
-                <label>Thickness</label>
+                <label data-i18n="thickness">Thickness</label>
                 <div class="input-row">
                     <input type="number" id="stencilThickness" value="0.12" step="0.01" min="0.05" max="1">
                     <span class="unit">mm</span>
                 </div>
             </div>
             <div class="toggle-row">
-                <label for="highDetail">High detail (resin)</label>
+                <label for="highDetail" data-i18n="highDetail">High detail (resin)</label>
                 <input type="checkbox" id="highDetail">
             </div>
-            <div class="hint">Include apertures smaller than 0.1mm — only achievable on resin printers</div>
+            <div class="hint" data-i18n="highDetailHint">Include apertures smaller than 0.1mm — only achievable on resin printers</div>
+            <div class="input-group">
+                <label data-i18n="nozzle">Nozzle (FDM merge)</label>
+                <div class="input-row">
+                    <input type="number" id="nozzleSize" value="0" step="0.05" min="0" max="2">
+                    <span class="unit">mm</span>
+                </div>
+            </div>
+            <div class="hint" data-i18n="nozzleHint">Merge apertures whose gap is smaller than the nozzle into one slot — paste volume is preserved (0 disables)</div>
         </div>
 
         <div id="lipSection">
-            <h2>Board Lip</h2>
+            <h2 data-i18n="boardLip">Board Lip</h2>
             <div class="toggle-row">
-                <label for="lipEnabled">Enable lip</label>
+                <label for="lipEnabled" data-i18n="enableLip">Enable lip</label>
                 <input type="checkbox" id="lipEnabled" checked>
             </div>
             <div id="lipControls">
                 <div class="input-group">
-                    <label>Lip Height</label>
+                    <label data-i18n="lipHeight">Lip Height</label>
                     <div class="input-row">
                         <input type="number" id="lipHeight" value="1.2" step="0.1" min="0.5" max="10">
                         <span class="unit">mm</span>
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Wall Thickness</label>
+                    <label data-i18n="wallThickness">Wall Thickness</label>
                     <div class="input-row">
                         <input type="number" id="lipWall" value="1.2" step="0.1" min="0.3" max="5">
                         <span class="unit">mm</span>
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Fit Clearance</label>
+                    <label data-i18n="fitClearance">Fit Clearance</label>
                     <div class="input-row">
                         <input type="number" id="lipClearance" value="0.15" step="0.05" min="0" max="2">
                         <span class="unit">mm</span>
@@ -179,27 +200,114 @@
             </div>
         </div>
 
-        <button class="btn-primary" id="downloadBtn" disabled>Download STL</button>
-        <div class="info"><span id="infoText">Load a paste layer SVG or Gerber</span></div>
+        <button class="btn-primary" id="downloadBtn" disabled data-i18n="downloadStl">Download STL</button>
+        <div class="info"><span id="infoText" data-i18n="loadPasteLayer">Load a paste layer SVG or Gerber</span></div>
     </div>
     <div class="preview">
         <canvas id="canvas3d"></canvas>
-        <div class="preview-hint">Drag to rotate, scroll to zoom</div>
+        <div class="preview-hint" data-i18n="dragRotate">Drag to rotate, scroll to zoom</div>
     </div>
 
     <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/" } }
+    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-        import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+        import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
         let apertures = [], svgBounds = null;
         let edgeCutsContour = null;
         let scene, camera, renderer, controls, stencilMesh, lipMesh;
+
+        // i18n — language is detected from navigator.language (default English) and can be
+        // toggled via the EN/RU switch in the header. Selection is intentionally not persisted.
+        const I18N = {
+            en: {
+                pasteLayer: 'Paste Layer File',
+                dropPaste: 'Drop SVG or Gerber file',
+                edgeCuts: 'Edge Cuts Layer',
+                optional: '(optional)',
+                dropEdgeCuts: 'Drop Gerber or SVG edge cuts',
+                edgeCutsExamples: 'e.g. Edge_Cuts.gbr, .gm1, .gko',
+                stencilSize: 'Stencil Size',
+                sizeFromEdgeCuts: 'Size set by edge cuts',
+                width: 'Width',
+                height: 'Height',
+                thickness: 'Thickness',
+                highDetail: 'High detail (resin)',
+                highDetailHint: 'Include apertures smaller than 0.1mm — only achievable on resin printers',
+                nozzle: 'Nozzle (FDM merge)',
+                nozzleHint: 'Merge apertures whose gap is smaller than the nozzle into one slot — paste volume is preserved (0 disables)',
+                boardLip: 'Board Lip',
+                enableLip: 'Enable lip',
+                lipHeight: 'Lip Height',
+                wallThickness: 'Wall Thickness',
+                fitClearance: 'Fit Clearance',
+                downloadStl: 'Download STL',
+                loadPasteLayer: 'Load a paste layer SVG or Gerber',
+                dragRotate: 'Drag to rotate, scroll to zoom',
+                noClosedContours: 'No closed contours found',
+                infoApertures: (n, w, h) => `Apertures: <span class="info-value">${n}</span> | Size: <span class="info-value">${w} x ${h} mm</span>`,
+                infoAperturesMerged: (n, m, w, h) => `Apertures: <span class="info-value">${n}</span> | Merged: <span class="info-value">${m}</span> | Size: <span class="info-value">${w} x ${h} mm</span>`,
+            },
+            ru: {
+                pasteLayer: 'Слой пасты',
+                dropPaste: 'Перетащите SVG или Gerber',
+                edgeCuts: 'Контур платы',
+                optional: '(опционально)',
+                dropEdgeCuts: 'Перетащите Gerber или SVG контура',
+                edgeCutsExamples: 'например Edge_Cuts.gbr, .gm1, .gko',
+                stencilSize: 'Размер трафарета',
+                sizeFromEdgeCuts: 'Размер берётся из контура платы',
+                width: 'Ширина',
+                height: 'Высота',
+                thickness: 'Толщина',
+                highDetail: 'Высокая детализация (resin)',
+                highDetailHint: 'Включает апертуры мельче 0.1мм — только для смоляных принтеров',
+                nozzle: 'Сопло (объединение для FDM)',
+                nozzleHint: 'Объединяет апертуры с зазором меньше сопла в одну прорезь, сохраняя объём пасты (0 — выключено)',
+                boardLip: 'Бортик платы',
+                enableLip: 'Включить бортик',
+                lipHeight: 'Высота бортика',
+                wallThickness: 'Толщина стенки',
+                fitClearance: 'Зазор посадки',
+                downloadStl: 'Скачать STL',
+                loadPasteLayer: 'Загрузите слой пасты в SVG или Gerber',
+                dragRotate: 'Тяните мышью для вращения, колесо — зум',
+                noClosedContours: 'Замкнутые контуры не найдены',
+                infoApertures: (n, w, h) => `Апертуры: <span class="info-value">${n}</span> | Размер: <span class="info-value">${w} x ${h} мм</span>`,
+                infoAperturesMerged: (n, m, w, h) => `Апертуры: <span class="info-value">${n}</span> | Объединено: <span class="info-value">${m}</span> | Размер: <span class="info-value">${w} x ${h} мм</span>`,
+            },
+        };
+        let currentLang = (navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en';
+        const t = (key) => I18N[currentLang][key] ?? I18N.en[key] ?? key;
+        function applyI18n() {
+            document.documentElement.lang = currentLang;
+            for (const el of document.querySelectorAll('[data-i18n]')) {
+                const key = el.getAttribute('data-i18n');
+                const val = I18N[currentLang][key];
+                if (typeof val === 'string') el.textContent = val;
+            }
+            for (const btn of document.querySelectorAll('.lang-btn')) {
+                btn.classList.toggle('active', btn.dataset.lang === currentLang);
+            }
+            // Refresh dynamic info panel if a paste layer is already loaded
+            if (svgBounds) refreshInfoText();
+        }
+        function refreshInfoText() {
+            if (!svgBounds) return;
+            const w = svgBounds.width.toFixed(1), h = svgBounds.height.toFixed(1);
+            // Use same merge logic as generateStencil to compute the merged count for display
+            const nozzle = parseFloat(document.getElementById('nozzleSize').value) || 0;
+            const rendered = nozzle > 0 ? mergeNearbyApertures(apertures, nozzle) : apertures;
+            const merged = apertures.length - rendered.length;
+            document.getElementById('infoText').innerHTML = merged > 0
+                ? t('infoAperturesMerged')(rendered.length, merged, w, h)
+                : t('infoApertures')(rendered.length, w, h);
+        }
 
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
@@ -213,6 +321,7 @@
         const heightInput = document.getElementById('stencilHeight');
         const thicknessInput = document.getElementById('stencilThickness');
         const highDetailInput = document.getElementById('highDetail');
+        const nozzleInput = document.getElementById('nozzleSize');
         const lipSection = document.getElementById('lipSection');
         const lipEnabledInput = document.getElementById('lipEnabled');
         const lipHeightInput = document.getElementById('lipHeight');
@@ -223,7 +332,7 @@
         function initThreeJS() {
             const canvas = document.getElementById('canvas3d');
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a1a2e);
+            scene.background = new THREE.Color(0xf1f1f1);
             camera = new THREE.PerspectiveCamera(45, canvas.parentElement.clientWidth / canvas.parentElement.clientHeight, 0.1, 10000);
             camera.position.set(0, 0, 200);
             renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -235,7 +344,7 @@
             const light = new THREE.DirectionalLight(0xffffff, 0.8);
             light.position.set(50, 100, 50);
             scene.add(light);
-            const grid = new THREE.GridHelper(200, 20, 0x444444, 0x222222);
+            const grid = new THREE.GridHelper(200, 20, 0xdcdcdc, 0xeaeaea);
             grid.rotation.x = Math.PI / 2;
             scene.add(grid);
             animate();
@@ -485,12 +594,13 @@
                 }
                 if (/^M0*2$/.test(cmd)) break;           // end of file
 
-                // Standalone aperture select: D10+
-                const dSelect = cmd.match(/^D(\d+)$/);
+                // Standalone aperture select: D10+. Bare D01/D02/D03 (Altium-style flash
+                // after a separate move) must fall through to the coord handler below —
+                // its regex matches D-only commands too.
+                const dSelect = cmd.match(/^D0*(\d+)$/);
                 if (dSelect) {
                     const n = parseInt(dSelect[1]);
-                    if (n >= 10) curAp = apertureMap[n] || null;
-                    continue;
+                    if (n >= 10) { curAp = apertureMap[n] || null; continue; }
                 }
 
                 // Coordinate command with optional G-prefix, X, Y, I, J, and required D-code
@@ -502,7 +612,15 @@
                     if (dCode >= 10) {
                         curAp = apertureMap[dCode] || null; // G54D<n> old-style aperture select
                     } else if (dCode === 2) {
-                        if (inRegion) regionPts = [{ x: curX, y: curY }];
+                        // In region mode, D02 closes the current sub-contour and starts a new one.
+                        // Flush before resetting so trailing D02 before G37 (Altium-style) keeps the contour.
+                        if (inRegion) {
+                            if (regionPts.length >= 3) {
+                                for (const p of regionPts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+                                results.push(regionPts);
+                            }
+                            regionPts = [{ x: curX, y: curY }];
+                        }
                     } else if (dCode === 1) {
                         if (inRegion) regionPts.push({ x: curX, y: curY });
                     } else if (dCode === 3 && !inRegion && curAp) {
@@ -704,6 +822,79 @@
             return signedArea(pts) > 0 ? pts.slice().reverse() : pts;
         }
 
+        // Merge apertures separated by gaps smaller than the nozzle into one slot per cluster.
+        // Cluster condition: bounding boxes overlap on one axis and the gap on the other axis is < nozzle.
+        // Slot replacement preserves total paste volume (length spans the cluster, width = totalArea/length,
+        // capped at the largest source aperture's cross-axis size so we never grow it).
+        function mergeNearbyApertures(polys, nozzle) {
+            if (!(nozzle > 0) || polys.length < 2) return polys;
+            const boxes = polys.map(pts => {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (const p of pts) {
+                    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+                }
+                return { minX, minY, maxX, maxY };
+            });
+            const areas = polys.map(pts => Math.abs(signedArea(pts)));
+
+            const parent = polys.map((_, i) => i);
+            const find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+            const unite = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+
+            for (let i = 0; i < boxes.length; i++) {
+                for (let j = i + 1; j < boxes.length; j++) {
+                    const a = boxes[i], b = boxes[j];
+                    const yOverlap = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
+                    const xGap = Math.max(a.minX, b.minX) - Math.min(a.maxX, b.maxX);
+                    const xOverlap = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
+                    const yGap = Math.max(a.minY, b.minY) - Math.min(a.maxY, b.maxY);
+                    const horizontalRow = yOverlap > 0 && xGap >= 0 && xGap < nozzle;
+                    const verticalRow   = xOverlap > 0 && yGap >= 0 && yGap < nozzle;
+                    if (horizontalRow || verticalRow) unite(i, j);
+                }
+            }
+
+            const groups = new Map();
+            for (let i = 0; i < polys.length; i++) {
+                const r = find(i);
+                if (!groups.has(r)) groups.set(r, []);
+                groups.get(r).push(i);
+            }
+
+            const result = [];
+            for (const idxs of groups.values()) {
+                if (idxs.length === 1) { result.push(polys[idxs[0]]); continue; }
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                let totalArea = 0, maxW = 0, maxH = 0;
+                for (const i of idxs) {
+                    const b = boxes[i];
+                    if (b.minX < minX) minX = b.minX; if (b.maxX > maxX) maxX = b.maxX;
+                    if (b.minY < minY) minY = b.minY; if (b.maxY > maxY) maxY = b.maxY;
+                    if (b.maxX - b.minX > maxW) maxW = b.maxX - b.minX;
+                    if (b.maxY - b.minY > maxH) maxH = b.maxY - b.minY;
+                    totalArea += areas[i];
+                }
+                const W = maxX - minX, H = maxY - minY;
+                const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+                let newW, newH;
+                if (W >= H) { // horizontal slot: length along X
+                    newW = W;
+                    newH = Math.min(maxH, totalArea / W);
+                } else {      // vertical slot: length along Y
+                    newH = H;
+                    newW = Math.min(maxW, totalArea / H);
+                }
+                result.push([
+                    { x: cx - newW/2, y: cy - newH/2 },
+                    { x: cx + newW/2, y: cy - newH/2 },
+                    { x: cx + newW/2, y: cy + newH/2 },
+                    { x: cx - newW/2, y: cy + newH/2 },
+                ]);
+            }
+            return result;
+        }
+
         function generateStencil() {
             if (!apertures.length || !svgBounds) return;
 
@@ -732,13 +923,14 @@
                 outerEdge = offsetPolygon(contourWorld, lipClearance + lipWall);
             }
 
-            // Create stencil shape: board outline when lip is on, rectangle otherwise
+            // Create stencil shape. With a lip we use the inner edge so the stencil sits flush
+            // inside the lip column — this avoids overlapping bottom/top annulus faces between
+            // the stencil and lip meshes (which would otherwise be degenerate back-to-back surfaces).
             const shape = new THREE.Shape();
-            if (useLip && outerEdge) {
-                // Shape follows the outer edge of the lip — stencil doesn't extend beyond the board
-                const outerCCW = signedArea(outerEdge) < 0 ? outerEdge.slice().reverse() : outerEdge;
-                shape.moveTo(outerCCW[0].x, outerCCW[0].y);
-                for (let i = 1; i < outerCCW.length; i++) shape.lineTo(outerCCW[i].x, outerCCW[i].y);
+            if (useLip && innerEdge) {
+                const innerCCW = signedArea(innerEdge) < 0 ? innerEdge.slice().reverse() : innerEdge;
+                shape.moveTo(innerCCW[0].x, innerCCW[0].y);
+                for (let i = 1; i < innerCCW.length; i++) shape.lineTo(innerCCW[i].x, innerCCW[i].y);
                 shape.closePath();
             } else {
                 shape.moveTo(-width/2, -height/2);
@@ -750,12 +942,32 @@
 
             // Add apertures as holes — filter sub-0.1mm apertures unless high detail is enabled
             const minApertureSize = highDetailInput.checked ? 0 : 0.1;
-            for (const ap of apertures) {
+            const nozzle = parseFloat(nozzleInput.value) || 0;
+            const renderApertures = mergeNearbyApertures(apertures, nozzle);
+            if (svgBounds) {
+                const w = svgBounds.width.toFixed(1), h = svgBounds.height.toFixed(1);
+                const merged = apertures.length - renderApertures.length;
+                infoText.innerHTML = merged > 0
+                    ? t('infoAperturesMerged')(renderApertures.length, merged, w, h)
+                    : t('infoApertures')(renderApertures.length, w, h);
+            }
+            // Sub-micron jitter to break colinearity between adjacent apertures.
+            // ExtrudeGeometry's earcut triangulator drops cap edges when two holes share a
+            // colinear y or x coordinate (e.g. parallel pin rows with identical pad widths),
+            // leaving open edges on the top/bottom face. 1e-5 mm shift is invisible to slicers.
+            const JITTER = 1e-5;
+            const jittered = (i, key) => ((Math.sin(i * 12.9898 + (key === 'x' ? 78.233 : 39.346)) * 43758.5453) % 1) * JITTER;
+
+            for (let ai = 0; ai < renderApertures.length; ai++) {
+                const ap = renderApertures[ai];
                 const apXs = ap.map(p => p.x), apYs = ap.map(p => p.y);
                 if (Math.max(...apXs) - Math.min(...apXs) < minApertureSize) continue;
                 if (Math.max(...apYs) - Math.min(...apYs) < minApertureSize) continue;
-                // Transform: center and flip Y (second flip corrects the Y-inversion from parsing)
-                let pts = ap.map(p => ({ x: p.x - centerX, y: -(p.y - centerY) }));
+                // Transform: center, flip Y (corrects Y-inversion from parsing), and jitter per-aperture
+                let pts = ap.map((p, pi) => ({
+                    x: p.x - centerX + jittered(ai * 1000 + pi, 'x'),
+                    y: -(p.y - centerY) + jittered(ai * 1000 + pi, 'y'),
+                }));
                 pts = ensureCW(pts);
 
                 if (pts.length >= 3) {
@@ -775,15 +987,16 @@
                 bevelEnabled: false
             });
 
-            stencilMesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: 0x4a90d9, side: THREE.DoubleSide }));
+            stencilMesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: 0x6865ff, side: THREE.DoubleSide }));
             stencilMesh.position.z = -thickness / 2;
             scene.add(stencilMesh);
 
-            // Generate lip mesh (annular wall hanging below stencil)
+            // Generate lip mesh as an annular column spanning the full stencil + lip height.
+            // Its inner wall (innerEdge) coincides with the stencil's outer wall, so mergeVertices
+            // during export sews them into one watertight body with no internal faces.
             if (useLip && innerEdge && outerEdge) {
                 const lipHeight = parseFloat(lipHeightInput.value);
 
-                // Build annular shape: outer boundary with inner boundary as hole
                 const lipShape = new THREE.Shape();
                 const outerCCW = signedArea(outerEdge) < 0 ? outerEdge.slice().reverse() : outerEdge;
                 lipShape.moveTo(outerCCW[0].x, outerCCW[0].y);
@@ -798,12 +1011,12 @@
                 lipShape.holes.push(lipHole);
 
                 const lipGeometry = new THREE.ExtrudeGeometry(lipShape, {
-                    depth: lipHeight,
+                    depth: thickness + lipHeight,
                     bevelEnabled: false
                 });
 
-                // Lip spans Z: [-(thickness/2 + lipHeight), -thickness/2], flush with stencil bottom
-                lipMesh = new THREE.Mesh(lipGeometry, new THREE.MeshPhongMaterial({ color: 0xe94560, side: THREE.DoubleSide }));
+                // Lip column spans Z: [-(thickness/2 + lipHeight), +thickness/2]
+                lipMesh = new THREE.Mesh(lipGeometry, new THREE.MeshPhongMaterial({ color: 0xea9920, side: THREE.DoubleSide }));
                 lipMesh.position.z = -(thickness / 2 + lipHeight);
                 scene.add(lipMesh);
             }
@@ -815,23 +1028,61 @@
             downloadBtn.disabled = false;
         }
 
+        // Drop pairs of triangles that share the same three vertices but have opposite winding —
+        // they appear where the stencil's outer wall coincides with the lip's inner wall (both
+        // run along innerEdge over the stencil thickness). Removing the degenerate pair leaves
+        // a clean watertight manifold without internal back-to-back surfaces.
+        function removeBackToBackTriangles(geo) {
+            if (!geo.index) return geo;
+            const idx = geo.index.array;
+            const triCount = idx.length / 3;
+            const sig = (a, b, c) => { const s = [a, b, c].sort((x, y) => x - y); return `${s[0]}_${s[1]}_${s[2]}`; };
+            const seen = new Map(); // sig -> first triangle's id
+            const dropped = new Set();
+            for (let i = 0; i < triCount; i++) {
+                const k = sig(idx[i*3], idx[i*3+1], idx[i*3+2]);
+                if (seen.has(k)) {
+                    dropped.add(i);
+                    dropped.add(seen.get(k));
+                } else {
+                    seen.set(k, i);
+                }
+            }
+            if (!dropped.size) return geo;
+            const out = new Uint32Array((triCount - dropped.size) * 3);
+            let w = 0;
+            for (let i = 0; i < triCount; i++) {
+                if (dropped.has(i)) continue;
+                out[w++] = idx[i*3]; out[w++] = idx[i*3+1]; out[w++] = idx[i*3+2];
+            }
+            geo.setIndex(new THREE.BufferAttribute(out, 1));
+            return geo;
+        }
+
         function downloadSTL() {
             if (!stencilMesh) return;
             const exporter = new STLExporter();
 
+            // mergeVertices closes open edges from ExtrudeGeometry's non-indexed buffer and
+            // welds the stencil↔lip seam where their walls coincide. Then we strip back-to-back
+            // triangle pairs left over from that overlap to make the result strictly manifold.
+            const WELD_TOL = 1e-4;
+
             let buffer;
             if (lipMesh) {
-                // Merge stencil and lip into a single geometry for a clean STL
                 const stencilGeo = stencilMesh.geometry.clone().applyMatrix4(stencilMesh.matrixWorld);
                 const lipGeo = lipMesh.geometry.clone().applyMatrix4(lipMesh.matrixWorld);
-                const merged = mergeGeometries([stencilGeo, lipGeo]);
-                const tempMesh = new THREE.Mesh(merged);
-                buffer = exporter.parse(tempMesh, { binary: true });
+                const merged = mergeVertices(mergeGeometries([stencilGeo, lipGeo]), WELD_TOL);
+                removeBackToBackTriangles(merged);
+                buffer = exporter.parse(new THREE.Mesh(merged), { binary: true });
                 merged.dispose();
                 stencilGeo.dispose();
                 lipGeo.dispose();
             } else {
-                buffer = exporter.parse(stencilMesh, { binary: true });
+                const cleaned = mergeVertices(stencilMesh.geometry.clone(), WELD_TOL);
+                removeBackToBackTriangles(cleaned);
+                buffer = exporter.parse(new THREE.Mesh(cleaned), { binary: true });
+                cleaned.dispose();
             }
 
             const blob = new Blob([buffer], { type: 'application/octet-stream' });
@@ -851,7 +1102,7 @@
                 apertures = isGerber(file.name) ? parseGerber(e.target.result) : parseSVG(e.target.result);
                 filenameEl.textContent = file.name;
                 dropZone.classList.add('loaded');
-                infoText.innerHTML = `Apertures: <span class="info-value">${apertures.length}</span> | Size: <span class="info-value">${svgBounds.width.toFixed(1)} x ${svgBounds.height.toFixed(1)} mm</span>`;
+                infoText.innerHTML = t('infoApertures')(apertures.length, svgBounds.width.toFixed(1), svgBounds.height.toFixed(1));
                 widthInput.value = Math.ceil(svgBounds.width + 20);
                 heightInput.value = Math.ceil(svgBounds.height + 20);
                 generateStencil();
@@ -866,8 +1117,8 @@
                 const contours = isGerber(file.name) ? parseEdgeCuts(content) : parseSVGEdgeCuts(content);
 
                 if (!contours.length) {
-                    edgeCutsFilenameEl.textContent = 'No closed contours found';
-                    edgeCutsFilenameEl.style.color = '#e94560';
+                    edgeCutsFilenameEl.textContent = t('noClosedContours');
+                    edgeCutsFilenameEl.style.color = 'var(--alert-color)';
                     return;
                 }
 
@@ -916,6 +1167,8 @@
         heightInput.addEventListener('change', generateStencil);
         thicknessInput.addEventListener('change', generateStencil);
         highDetailInput.addEventListener('change', generateStencil);
+        nozzleInput.addEventListener('change', generateStencil);
+        nozzleInput.addEventListener('input', generateStencil);
         function updateLipUI() {
             const on = lipEnabledInput.checked;
             lipControls.style.opacity = on ? '1' : '0.4';
@@ -926,6 +1179,11 @@
         lipHeightInput.addEventListener('change', generateStencil);
         lipWallInput.addEventListener('change', generateStencil);
         lipClearanceInput.addEventListener('change', generateStencil);
+
+        for (const btn of document.querySelectorAll('.lang-btn')) {
+            btn.addEventListener('click', () => { currentLang = btn.dataset.lang; applyI18n(); });
+        }
+        applyI18n();
 
         initThreeJS();
     </script>

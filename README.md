@@ -1,62 +1,99 @@
 # SVG2Stencil
 
-3D print a solder paste stencil for any circuit board. Export the paste layer from KiCad as a Gerber or SVG file and get a custom STL file you can 3D print.
+Generate 3D-printable solder paste stencils from PCB Gerber or SVG files. Runs entirely in your browser — no install, no upload.
 
-Optionally add a **board lip** — a wall around the edge of the PCB that lets the stencil seat itself automatically without manual alignment.
+This is a fork of [user-will/svg2stencil](https://github.com/user-will/svg2stencil) with additions oriented toward FDM printing, broader Gerber dialect support, and Russian localization.
 
-![Example](printastencil.png)
+Live demo: [djobsidian.github.io/svg2stencil](https://djobsidian.github.io/svg2stencil/)
 
-## Usage
+## What's added in this fork
 
-1. Open `index.html` in a browser
-2. Export your paste layer from KiCad:
-   - **Gerber (recommended):** File > Fabrication Outputs > Gerbers, enable F.Paste
-   - **SVG:** File > Plot > F.Paste, select SVG format
-3. Drag and drop the file onto the paste layer drop zone (or click to browse)
-4. Adjust stencil dimensions:
-   - **Width/Height**: Overall stencil size (auto-sized to fit with 20mm margin)
-   - **Thickness**: Stencil thickness (default 0.12mm)
-   - **High detail (resin)**: Enable to include apertures smaller than 0.1mm — off by default since FDM printers can't reliably print them, but resin printers can
-5. Preview the stencil in the 3D viewer (drag to rotate, scroll to zoom)
-6. Click **Download STL** to save
+### Altium Gerber support
+The original parser dropped Altium-style flashes — Altium emits `X..Y..D02*` (move) and `D03*` (flash) as separate commands, while KiCad collapses them into a single `X..Y..D03*`. This fork handles both. Region blocks with a trailing `D02*` before `G37*` (also Altium-specific) are parsed correctly too.
 
-### Adding a board lip (auto-alignment)
+### FDM aperture merging
+Set the **Nozzle (FDM merge)** parameter to your printer's nozzle diameter (e.g. 0.4mm). Adjacent apertures whose gap is smaller than that nozzle get merged into a single slot, because FDM can't reliably print walls thinner than one nozzle.
 
-A board lip adds walls that hang below the stencil and wrap around the PCB edges, so the stencil seats itself on the board without needing to be manually aligned.
+Total paste volume is preserved by shrinking the slot's cross-axis dimension proportionally — surface tension during reflow redistributes the paste back to each pad. The info panel shows aperture count and how many were merged.
 
-1. Export the edge cuts layer from KiCad:
-   - **Gerber:** File > Fabrication Outputs > Gerbers, enable Edge.Cuts — produces `*Edge_Cuts.gbr` or similar (`.gm1`, `.gko`)
-   - **SVG:** File > Plot > Edge.Cuts, select SVG format
-2. Drag and drop the edge cuts file onto the **Edge Cuts Layer** drop zone
-3. The **Board Lip** section will appear with three controls:
-   - **Lip Height**: How far the wall extends below the stencil (default 1.2mm)
-   - **Wall Thickness**: Thickness of the lip wall (default 1.2mm)
-   - **Fit Clearance**: Gap between the lip's inner face and the PCB edge (default 0.15mm) — increase if the fit is too tight
-4. When the lip is enabled the stencil is automatically sized to the board outline — it won't extend beyond the edge of the PCB
+`0` disables the feature (use this for resin printing where fine detail is reliable).
 
-If your board has interior cutouts (keychain holes, slots, etc.) the outermost contour is automatically selected as the board outline.
+### Watertight STL output
+Three issues from the original output are fixed:
+- **Sub-micron coordinate jitter** breaks earcut's coalinearity edge cases that produced ~140 open edges on dense pad rows.
+- **`mergeVertices` on export** welds duplicates from `ExtrudeGeometry`'s non-indexed buffer.
+- **Stencil↔lip topology** rebuilt so their walls coincide on the inner edge instead of stacking back-to-back annular faces.
 
-## Supported File Formats
+Result: 0 open edges. A handful of non-manifold edges remain where stencil and lip walls coincide; every slicer we've tested ignores them.
+
+### Offline-first
+Three.js is bundled in `vendor/` instead of pulled from a CDN, so the tool works offline and isn't blocked by ad blockers / corporate proxies.
+
+### Bilingual UI (English / Русский)
+Language is detected from the browser, defaulting to English. Switch with the **EN / RU** buttons in the header. Selection isn't persisted.
+
+### Brand colors
+Light theme using a fixed palette (CSS variables in `index.html`).
+
+---
+
+## Что добавлено в этом форке
+
+### Поддержка Gerber'ов от Altium
+Оригинальный парсер пропускал Altium-style flashes — Altium пишет `X..Y..D02*` (move) и `D03*` (flash) отдельными командами, а KiCad одной `X..Y..D03*`. Форк понимает оба варианта. Регионы с лишним `D02*` перед `G37*` (тоже Altium-специфика) тоже парсятся корректно.
+
+### Объединение апертур для FDM
+Параметр **Сопло (объединение для FDM)** — диаметр сопла твоего принтера (напр. 0.4мм). Близко расположенные апертуры, между которыми зазор меньше сопла, объединяются в одну прорезь, потому что FDM физически не напечатает перегородку тоньше одной экструзионной линии.
+
+Объём пасты сохраняется: ширина прорези поджимается так, чтобы суммарная площадь равнялась площади оригинальных апертур. Поверхностное натяжение при reflow растащит пасту обратно по пинам. В инфо-панели видно количество апертур и сколько объединено.
+
+`0` — фича выключена (использовать для смоляной печати где мелкие апертуры воспроизводятся точно).
+
+### Watertight STL
+Исправлены три проблемы оригинального экспорта:
+- **Микро-jitter координат** ломает чувствительность earcut к коллинеарным рёбрам, которая давала ~140 открытых рёбер на плотных рядах пинов.
+- **`mergeVertices` на экспорте** склеивает дубли вершин в non-indexed буфере `ExtrudeGeometry`.
+- **Топология стенцила и бортика** перестроена так, что их стенки совпадают по innerEdge, а не лежат двумя параллельными аннулярными плоскостями.
+
+Итог: 0 открытых рёбер. Остаётся пара non-manifold рёбер на стыке стенцила и бортика — слайсеры на это не жалуются.
+
+### Работа без интернета
+Three.js лежит локально в `vendor/`, не тянется с CDN. Сайт работает оффлайн и не падает за корпоративным фильтром / AdGuard'ом.
+
+### Двуязычный интерфейс (EN / RU)
+Язык определяется по браузеру, по умолчанию английский. Переключатель **EN / RU** в шапке. Выбор не сохраняется.
+
+---
+
+## Usage / Использование
+
+Module imports require an HTTP server — `file://` won't work. Two options:
+
+- **Windows:** double-click `serve.bat` (uses Python's built-in `http.server` on port 8765 and opens the browser).
+- **Anywhere:** run any static server in this folder, e.g. `python -m http.server 8765`, then open `http://localhost:8765/`.
+
+Then:
+
+1. Drop a paste-layer file (`.gtp`, `.gbr`, `.gbp`, `.svg`, ...) on the **Paste Layer File** zone.
+2. Optionally drop the edge-cuts file (`.gm1`, `.gko`, `Edge_Cuts.gbr`, ...) on the **Edge Cuts Layer** zone — enables auto-alignment via a board lip.
+3. Set **Nozzle (FDM merge)** to your printer's nozzle diameter for FDM. Leave at 0 for resin / no merging.
+4. Click **Download STL**.
+
+## Supported formats
 
 ### Gerber (RS-274X)
-Accepts `.gbr`, `.ger`, `.gtp`, `.gbp`, `.gm1`, `.gko`, and other common Gerber extensions. Supports:
+Accepts `.gbr`, `.ger`, `.gtp`, `.gbp`, `.gm1`, `.gko`. Supports:
 - Standard aperture types: circle (C), rectangle (R), obround (O), polygon (P)
-- KiCad's `RoundRect` aperture macro for rounded rectangle pads
+- Aperture macros (`%AM...%`), including KiCad `RoundRect` and Altium-style absolute-baked macros
 - Pre-instantiated aperture macros (KiCad 6+)
 - Region fills (G36/G37) for polygon-defined apertures
+- Bare D-codes (Altium-style separate move + flash)
 - Stroke-based edge cuts with linear and arc segments (G01/G02/G03)
 - Both metric (mm) and imperial (inch) units
 
 ### SVG
-Accepts `.svg` files exported from KiCad's plot function. Parses filled paths as paste apertures and stroke-only paths as edge cuts outlines.
+Accepts `.svg` files exported from KiCad's plot function. Filled paths become paste apertures; stroke-only paths become edge cuts outlines.
 
-## Requirements
+## License
 
-- Modern browser with WebGL support
-- No installation or build step required
-
-## Notes
-
-- Apertures smaller than 0.1mm are filtered out by default — enable **High detail (resin)** to include them
-- When the board lip is enabled the STL contains the stencil and lip as a single merged solid
-- STL files may need minor repair for 3D printing (most slicers handle this automatically)
+MIT, same as upstream.
