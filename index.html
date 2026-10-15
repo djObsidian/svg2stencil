@@ -115,7 +115,7 @@
                 <div class="drop-zone-text" data-i18n="dropPaste">Drop SVG or Gerber file</div>
                 <div class="filename" id="filename"></div>
             </div>
-            <input type="file" id="fileInput" accept=".svg,.gbr,.ger,.gtp,.gbp,.gm1,.gtl,.gbl">
+            <input type="file" id="fileInput" accept=".svg,.gbr,.ger,.gm,.gtp,.gbp,.gm1,.gtl,.gbl">
         </div>
 
         <div>
@@ -124,7 +124,7 @@
                 <div class="drop-zone-text" data-i18n="dropEdgeCuts">Drop Gerber or SVG edge cuts</div>
                 <div class="filename" id="edgeCutsFilename"></div>
             </div>
-            <input type="file" id="edgeCutsFileInput" accept=".svg,.gbr,.ger,.gm1,.gm2,.gm3,.gko">
+            <input type="file" id="edgeCutsFileInput" accept=".svg,.gbr,.ger,.gm,.gm1,.gm2,.gm3,.gko">
             <div class="hint" data-i18n="edgeCutsExamples">e.g. Edge_Cuts.gbr, .gm1, .gko</div>
         </div>
 
@@ -451,6 +451,33 @@
             while ((m = amRe.exec(content)) !== null) {
                 const name = m[1];
                 const prims = m[2].split('*').map(s => s.trim()).filter(Boolean);
+                // Altium rounded rectangles consist of two rotated bars and four circles.
+                // Recover the local outline, retaining its rotation and corner radius.
+                const primitives = prims.map(s => s.split(',').map(Number));
+                const bars = primitives.filter(p => p[0] === 21 && p[1] === 1);
+                const circles = primitives.filter(p => p[0] === 1 && p[1] === 1);
+                if (primitives.length === 6 && bars.length === 2 && circles.length === 4) {
+                    const [a, b] = bars, r = circles[0][2]/2;
+                    const w = Math.max(a[2], b[2]), h = Math.max(a[3], b[3]);
+                    const angle = (a[6] || 0)*Math.PI/180;
+                    const cos = Math.cos(angle), sin = Math.sin(angle);
+                    const close = (x, y) => Math.abs(x-y) < 0.00003;
+                    const corners = circles.map(p => {
+                        const rot = (p[5] || 0)*Math.PI/180;
+                        const x = p[3]*Math.cos(rot)-p[4]*Math.sin(rot);
+                        const y = p[3]*Math.sin(rot)+p[4]*Math.cos(rot);
+                        return { x: x*cos+y*sin-a[4], y: -x*sin+y*cos-a[5] };
+                    });
+                    if (r > 0 && w > 2*r && h > 2*r &&
+                        close(a[4], b[4]) && close(a[5], b[5]) && close(a[6] || 0, b[6] || 0) &&
+                        close(Math.min(a[2], b[2]), w-2*r) && close(Math.min(a[3], b[3]), h-2*r) &&
+                        circles.every(p => close(p[2], 2*r)) &&
+                        [[-1,-1],[-1,1],[1,-1],[1,1]].every(([sx,sy]) =>
+                            corners.some(p => close(p.x,sx*(w/2-r)) && close(p.y,sy*(h/2-r))))) {
+                        macroShapes[name] = { rounded: true, w, h, r, ox: a[4], oy: a[5], cos, sin };
+                        continue;
+                    }
+                }
                 let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity, ok = false;
                 for (const prim of prims) {
                     const p = prim.split(',').map(parseFloat);
@@ -559,6 +586,12 @@
 
                 // For any macro: try the bounding box computed from the %AM...% block
                 const ms = macroShapes[type];
+                if (ms && ms.rounded) {
+                    return roundedRectPoints(0, 0, ms.w/2, ms.h/2, ms.r).map(p => ({
+                        x: cx + ((p.x+ms.ox)*ms.cos-(p.y+ms.oy)*ms.sin)*toMM,
+                        y: cy - ((p.x+ms.ox)*ms.sin+(p.y+ms.oy)*ms.cos)*toMM
+                    }));
+                }
                 if (ms && ms.hw > 0) return rectPoints(cx, cy, ms.hw, ms.hh);
 
                 // Generic fallback: first two params as full w/h, or first as diameter
@@ -1093,7 +1126,7 @@
         }
 
         function isGerber(name) {
-            return /\.(gbr|ger|gtp|gbp|gm\d+|gtl|gbl|gko)$/i.test(name);
+            return /\.(gbr|ger|gtp|gbp|gm\d*|gtl|gbl|gko)$/i.test(name);
         }
 
         function loadFile(file) {
