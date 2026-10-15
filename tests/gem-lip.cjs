@@ -18,6 +18,7 @@ const { pathToFileURL } = require('node:url');
     const input = value => ({ value });
     const c = vm.createContext({
         THREE, mergeVertices, mergeGeometries, STLExporter, Blob,
+        ClipperLib: require('../vendor/clipper/clipper.js'),
         scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(),
         controls: { target: new THREE.Vector3(), update() {} },
         widthInput: input(138), heightInput: input(115), thicknessInput: input(0.12),
@@ -45,7 +46,7 @@ const { pathToFileURL } = require('node:url');
         ).intersectObject(mesh).length > 0);
     }
     const generate = () => vm.runInContext('generateStencil(); globalThis.mesh = stencilMesh;', c);
-    for (const nozzle of [0, 0.4]) {
+    for (const nozzle of [0, 0.3, 0.4]) {
         c.nozzleInput.value = nozzle;
         c.lipEnabledInput.checked = false;
         generate();
@@ -70,4 +71,19 @@ const { pathToFileURL } = require('node:url');
             console.log(`GEM GM/GBP: 470 aperture positions match without/with lip, preview/STL; nozzle=${nozzle}, opposite=${opposite}`);
         }
     }
+    // A closed curved row produces a solid island, retained in both geometry builders.
+    c.ring = Array.from({length:16}, (_,i) => Array.from({length:32}, (_,j) => ({
+        x: 2.5*Math.cos(i*Math.PI/8)+0.4*Math.cos(j*Math.PI/16),
+        y: 2.5*Math.sin(i*Math.PI/8)+0.4*Math.sin(j*Math.PI/16)
+    })));
+    vm.runInContext(`apertures = ring; svgBounds = {minX:-5,minY:-5,width:10,height:10};
+        edgeCutsContour = [{x:-5,y:-5},{x:5,y:-5},{x:5,y:5},{x:-5,y:5}];`, c);
+    c.centers = [{x:0,y:0},{x:2.5,y:0},{x:4,y:0}];
+    c.nozzleInput.value = 0.4;
+    for (const lip of [false,true]) {
+        c.lipEnabledInput.checked = lip;
+        generate();
+        assert.deepEqual(covered(c.mesh),[true,false,true],'ring center stays solid, curved slot stays open');
+    }
+    console.log('Closed curved row: solid island and open slot retained with/without lip');
 })().catch(error => { console.error(error); process.exitCode = 1; });

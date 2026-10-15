@@ -14,7 +14,9 @@ The original parser dropped Altium-style flashes — Altium emits `X..Y..D02*` (
 ### FDM aperture merging
 Set the **Nozzle (FDM merge)** parameter to your printer's nozzle diameter (e.g. 0.4mm). Adjacent apertures whose gap is smaller than that nozzle get merged into a single slot, because FDM can't reliably print walls thinner than one nozzle.
 
-Total paste volume is preserved by shrinking the slot's cross-axis dimension proportionally — surface tension during reflow redistributes the paste back to each pad. The info panel shows aperture count and how many were merged.
+Distances are measured between aperture contours, independently of their rotation. A gap equal to the nozzle diameter is retained (with a 0.000001 mm comparison tolerance). Nearby contours are connected locally, keeping rounded ends and following curved rows instead of replacing a whole cluster with a rectangle.
+
+Total paste volume is preserved by insetting the combined contour until its area matches the original openings. Unmerged apertures remain unchanged. The info panel shows aperture count and how many were merged. Polygon operations use the bundled [Clipper library](vendor/clipper/README.txt), so merging works offline.
 
 `0` disables the feature (use this for resin printing where fine detail is reliable).
 
@@ -45,7 +47,7 @@ Light theme using a fixed palette (CSS variables in `index.html`).
 ### Объединение апертур для FDM
 Параметр **Сопло (объединение для FDM)** — диаметр сопла твоего принтера (напр. 0.4мм). Близко расположенные апертуры, между которыми зазор меньше сопла, объединяются в одну прорезь, потому что FDM физически не напечатает перегородку тоньше одной экструзионной линии.
 
-Объём пасты сохраняется: ширина прорези поджимается так, чтобы суммарная площадь равнялась площади оригинальных апертур. Поверхностное натяжение при reflow растащит пасту обратно по пинам. В инфо-панели видно количество апертур и сколько объединено.
+Зазор измеряется между реальными контурами независимо от поворота апертур. При зазоре, равном диаметру сопла, вырезы остаются раздельными (допуск сравнения 0.000001 мм). Соседние контуры соединяются локально, сохраняя скругления и дуговое расположение ряда. Объём пасты сохраняется поджатием объединённого контура до исходной площади вырезов. Необъединённые апертуры остаются без изменений. В инфо-панели видно количество апертур и сколько объединено.
 
 `0` — фича выключена (использовать для смоляной печати где мелкие апертуры воспроизводятся точно).
 
