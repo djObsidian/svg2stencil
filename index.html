@@ -176,6 +176,10 @@
                 <input type="checkbox" id="lipEnabled" checked>
             </div>
             <div id="lipControls">
+                <div class="toggle-row">
+                    <label for="lipOpposite" data-i18n="lipOpposite">Lip on opposite side (bottom paste)</label>
+                    <input type="checkbox" id="lipOpposite">
+                </div>
                 <div class="input-group">
                     <label data-i18n="lipHeight">Lip Height</label>
                     <div class="input-row">
@@ -243,6 +247,7 @@
                 nozzleHint: 'Merge apertures whose gap is smaller than the nozzle into one slot — paste volume is preserved (0 disables)',
                 boardLip: 'Board Lip',
                 enableLip: 'Enable lip',
+                lipOpposite: 'Lip on opposite side (bottom paste)',
                 lipHeight: 'Lip Height',
                 wallThickness: 'Wall Thickness',
                 fitClearance: 'Fit Clearance',
@@ -324,6 +329,7 @@
         const nozzleInput = document.getElementById('nozzleSize');
         const lipSection = document.getElementById('lipSection');
         const lipEnabledInput = document.getElementById('lipEnabled');
+        const lipOppositeInput = document.getElementById('lipOpposite');
         const lipHeightInput = document.getElementById('lipHeight');
         const lipWallInput = document.getElementById('lipWall');
         const lipClearanceInput = document.getElementById('lipClearance');
@@ -1048,9 +1054,9 @@
                     bevelEnabled: false
                 });
 
-                // Lip column spans Z: [-(thickness/2 + lipHeight), +thickness/2]
+                // The ring overlaps the full stencil thickness and extends from the selected face.
                 lipMesh = new THREE.Mesh(lipGeometry, new THREE.MeshPhongMaterial({ color: 0xea9920, side: THREE.DoubleSide }));
-                lipMesh.position.z = -(thickness / 2 + lipHeight);
+                lipMesh.position.z = lipOppositeInput.checked ? -thickness / 2 : -(thickness / 2 + lipHeight);
                 scene.add(lipMesh);
             }
 
@@ -1103,6 +1109,8 @@
 
             let buffer;
             if (lipMesh) {
+                stencilMesh.updateMatrixWorld(true);
+                lipMesh.updateMatrixWorld(true);
                 const stencilGeo = stencilMesh.geometry.clone().applyMatrix4(stencilMesh.matrixWorld);
                 const lipGeo = lipMesh.geometry.clone().applyMatrix4(lipMesh.matrixWorld);
                 const merged = mergeVertices(mergeGeometries([stencilGeo, lipGeo]), WELD_TOL);
@@ -1205,10 +1213,12 @@
         function updateLipUI() {
             const on = lipEnabledInput.checked;
             lipControls.style.opacity = on ? '1' : '0.4';
+            lipOppositeInput.disabled = !on;
             document.getElementById('stencilDimensions').style.opacity = on ? '0.4' : '1';
             document.getElementById('sizeNote').style.display = on ? 'block' : 'none';
         }
         lipEnabledInput.addEventListener('change', () => { updateLipUI(); generateStencil(); });
+        lipOppositeInput.addEventListener('change', generateStencil);
         lipHeightInput.addEventListener('change', generateStencil);
         lipWallInput.addEventListener('change', generateStencil);
         lipClearanceInput.addEventListener('change', generateStencil);
