@@ -936,8 +936,14 @@
 
         // Build the stepped solid from its boundary surfaces, with no overlapping shells.
         function buildStencilWithLip(shape, innerEdge, outerEdge, thickness, lipHeight, opposite) {
-            const holes = shape.extractPoints(12).holes;
-            const ccw = pts => signedArea(pts) < 0 ? pts.slice().reverse() : pts.slice();
+            // Normalize closed paths before triangulation and wall construction.
+            const ccw = points => {
+                const pts = points.slice();
+                while (pts.length > 1 && pts[0].x === pts[pts.length-1].x &&
+                       pts[0].y === pts[pts.length-1].y) pts.pop();
+                return signedArea(pts) < 0 ? pts.reverse() : pts;
+            };
+            const holes = shape.extractPoints(12).holes.map(ccw);
             const inner = ccw(innerEdge), outer = ccw(outerEdge);
             const bottom = -thickness/2, top = thickness/2;
             const seat = opposite ? top : bottom;
@@ -947,8 +953,9 @@
             function cap(contour, cutouts, z, up) {
                 const outline = ccw(contour).map(p => new THREE.Vector2(p.x, p.y));
                 const rings = cutouts.map(p => ccw(p).reverse().map(v => new THREE.Vector2(v.x, v.y)));
+                const faces = THREE.ShapeUtils.triangulateShape(outline, rings);
                 const points = outline.concat(...rings);
-                for (const face of THREE.ShapeUtils.triangulateShape(outline, rings)) {
+                for (const face of faces) {
                     let [a,b,c] = face.map(i => points[i]);
                     const cross = (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
                     if ((cross > 0) !== up) [b,c] = [c,b];
