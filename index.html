@@ -934,6 +934,51 @@
             return result;
         }
 
+        // Build the stepped solid from its boundary surfaces, with no overlapping shells.
+        function buildStencilWithLip(shape, innerEdge, outerEdge, thickness, lipHeight, opposite) {
+            const holes = shape.extractPoints(12).holes;
+            const ccw = pts => signedArea(pts) < 0 ? pts.slice().reverse() : pts.slice();
+            const inner = ccw(innerEdge), outer = ccw(outerEdge);
+            const bottom = -thickness/2, top = thickness/2;
+            const seat = opposite ? top : bottom;
+            const tip = seat + (opposite ? lipHeight : -lipHeight);
+            const vertices = [];
+            const triangle = (a, b, c) => vertices.push(...a, ...b, ...c);
+            function cap(contour, cutouts, z, up) {
+                const outline = ccw(contour).map(p => new THREE.Vector2(p.x, p.y));
+                const rings = cutouts.map(p => ccw(p).reverse().map(v => new THREE.Vector2(v.x, v.y)));
+                const points = outline.concat(...rings);
+                for (const face of THREE.ShapeUtils.triangulateShape(outline, rings)) {
+                    let [a,b,c] = face.map(i => points[i]);
+                    const cross = (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+                    if ((cross > 0) !== up) [b,c] = [c,b];
+                    triangle([a.x,a.y,z], [b.x,b.y,z], [c.x,c.y,z]);
+                }
+            }
+            function wall(points, z0, z1) {
+                for (let i=0; i<points.length; i++) {
+                    const a=points[i], b=points[(i+1)%points.length];
+                    triangle([a.x,a.y,z0], [b.x,b.y,z0], [b.x,b.y,z1]);
+                    triangle([a.x,a.y,z0], [b.x,b.y,z1], [a.x,a.y,z1]);
+                }
+            }
+            cap(outer, holes, opposite ? bottom : top, !opposite);
+            cap(inner, holes, seat, opposite);
+            for (const hole of holes) wall(ccw(hole).reverse(), bottom, top);
+            const plateCount = vertices.length/3;
+            cap(outer, [inner], tip, opposite);
+            // Split outer walls at the plate faces so every shared edge has matching vertices.
+            wall(outer, bottom, top);
+            wall(outer, Math.min(seat,tip), Math.max(seat,tip));
+            wall(inner.slice().reverse(), Math.min(seat,tip), Math.max(seat,tip));
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.addGroup(0, plateCount, 0);
+            geometry.addGroup(plateCount, vertices.length/3-plateCount, 1);
+            geometry.computeVertexNormals();
+            return geometry;
+        }
+
         function generateStencil() {
             if (!apertures.length || !svgBounds) return;
 
@@ -945,7 +990,7 @@
             const centerY = svgBounds.minY + svgBounds.height / 2;
 
             // Clean up old meshes
-            if (stencilMesh) { scene.remove(stencilMesh); stencilMesh.geometry.dispose(); stencilMesh.material.dispose(); stencilMesh = null; }
+            if (stencilMesh) { scene.remove(stencilMesh); stencilMesh.geometry.dispose(); for (const material of [].concat(stencilMesh.material)) material.dispose(); stencilMesh = null; }
             if (lipMesh) { scene.remove(lipMesh); lipMesh.geometry.dispose(); lipMesh.material.dispose(); lipMesh = null; }
 
             const useLip = edgeCutsContour && lipEnabledInput.checked;
@@ -1030,34 +1075,18 @@
             stencilMesh.position.z = -thickness / 2;
             scene.add(stencilMesh);
 
-            // Generate lip mesh as an annular column spanning the full stencil + lip height.
-            // Its inner wall (innerEdge) coincides with the stencil's outer wall, so mergeVertices
-            // during export sews them into one watertight body with no internal faces.
             if (useLip && innerEdge && outerEdge) {
                 const lipHeight = parseFloat(lipHeightInput.value);
-
-                const lipShape = new THREE.Shape();
-                const outerCCW = signedArea(outerEdge) < 0 ? outerEdge.slice().reverse() : outerEdge;
-                lipShape.moveTo(outerCCW[0].x, outerCCW[0].y);
-                for (let i = 1; i < outerCCW.length; i++) lipShape.lineTo(outerCCW[i].x, outerCCW[i].y);
-                lipShape.closePath();
-
-                const lipHole = new THREE.Path();
-                const innerCW = ensureCW(innerEdge);
-                lipHole.moveTo(innerCW[0].x, innerCW[0].y);
-                for (let i = 1; i < innerCW.length; i++) lipHole.lineTo(innerCW[i].x, innerCW[i].y);
-                lipHole.closePath();
-                lipShape.holes.push(lipHole);
-
-                const lipGeometry = new THREE.ExtrudeGeometry(lipShape, {
-                    depth: thickness + lipHeight,
-                    bevelEnabled: false
-                });
-
-                // The ring overlaps the full stencil thickness and extends from the selected face.
-                lipMesh = new THREE.Mesh(lipGeometry, new THREE.MeshPhongMaterial({ color: 0xea9920, side: THREE.DoubleSide }));
-                lipMesh.position.z = lipOppositeInput.checked ? -thickness / 2 : -(thickness / 2 + lipHeight);
-                scene.add(lipMesh);
+                const solid = buildStencilWithLip(shape, innerEdge, outerEdge, thickness,
+                    lipHeight, lipOppositeInput.checked);
+                stencilMesh.geometry.dispose();
+                stencilMesh.material.dispose();
+                stencilMesh.geometry = solid;
+                stencilMesh.position.z = 0;
+                stencilMesh.material = [
+                    new THREE.MeshPhongMaterial({ color: 0x6865ff, side: THREE.DoubleSide }),
+                    new THREE.MeshPhongMaterial({ color: 0xea9920, side: THREE.DoubleSide })
+                ];
             }
 
             camera.position.set(0, 0, Math.max(width, height) * 1.5);
